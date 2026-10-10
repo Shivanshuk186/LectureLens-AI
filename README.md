@@ -1,579 +1,394 @@
+<div align="center">
+
 # LectureLens AI
 
-Retrieval over a YouTube DSA playlist. A student asks a question in Hinglish or English and
+### Every Concept. Every Timestamp. One Search Away.
 
-gets an answer **plus clickable links that jump to the exact second in the exact lecture**.
+**An AI-powered search engine for DSA lectures.** Ask questions in English or Hinglish, get grounded answers, and jump directly to the relevant moment in a YouTube lecture.
 
-```
+<br>
 
-"bhai memoization aur tabulation ka difference kahan explain kiya hai?"
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![Qdrant](https://img.shields.io/badge/Qdrant-Vector_Search-DC244C?style=for-the-badge)
+![Groq](https://img.shields.io/badge/Groq-LLM-F55036?style=for-the-badge)
+![Status](https://img.shields.io/badge/Project-Active-success?style=for-the-badge)
 
-→ Answer: 3-4 lines, grounded only in what was actually said
-
-→ Sources:
-
-   [1] DP Lecture 3 — Memoization Deep Dive        @ 12:04   ▸ jump
-
-   [2] DP Lecture 5 — Tabulation Recipe            @ 04:31   ▸ jump
-
-```
-
-Every generic RAG demo returns a blob of text. This returns *a place in a video*.
+</div>
 
 ---
 
-## Stack
+## Contents
 
-| Layer | Choice |
+- [What is LectureLens AI?](#-what-is-lecturelens-ai)
+- [How it works](#-how-it-works)
+- [Features](#-features)
+- [Technology stack](#-technology-stack)
+- [Quick start](#-quick-start)
+- [Usage](#-usage)
+- [Configuration](#-configuration)
+- [Evaluation](#-evaluation)
+- [Project structure](#-project-structure)
+- [Important implementation details](#-important-implementation-details)
+- [Deployment notes](#-deployment-notes)
 
+---
+
+## 🎯 What is LectureLens AI?
+
+Finding one explanation inside hours of lectures can be frustrating. LectureLens AI makes lecture content searchable: ask a question and receive a concise answer supported by relevant lecture segments and timestamps.
+
+For example:
+
+> **Question:** “Bhai, memoization aur tabulation ka difference kahan explain kiya hai?”
+>
+> **Result:** A short, context-grounded answer with source links such as:
+>
+> - **DP Lecture 3 — Memoization Deep Dive** · `12:04`
+> - **DP Lecture 5 — Tabulation Recipe** · `04:31`
+
+Select a citation to jump to that moment in the embedded YouTube player.
+
+> **Core idea:** Instead of returning only a block of text, LectureLens AI helps you find *where a concept was explained*.
+
+---
+
+## 🔄 How it works
+
+```text
+YouTube playlist
+      │
+      ▼
+Download audio ──► Transcribe with faster-whisper
+                         │
+                         ▼
+                  Time-aware chunking
+                         │
+                         ▼
+                 Generate embeddings
+                         │
+                         ▼
+                  Qdrant vector search
+                         │
+                         ▼
+Question ──► Retrieve relevant lecture segments
+                         │
+                         ▼
+                 Groq-powered answer
+                         │
+                         ▼
+          Answer + timestamped citations
+```
+
+The retrieval pipeline preserves timestamps so answers can point back to the source lecture. The system also includes relevance checks to reduce unsupported answers.
+
+---
+
+## ✨ Features
+
+- **Natural-language search:** Ask questions in English or Hinglish.
+- **Timestamped citations:** Jump directly to relevant moments in a YouTube lecture.
+- **Retrieval-augmented answers:** Answers are based on retrieved lecture context.
+- **Time-aware chunking:** Keeps lecture segments associated with their timestamps.
+- **Cached transcription:** Reuse completed transcripts instead of repeatedly transcribing videos.
+- **Resumable ingestion:** Continue after interrupted runs without redoing all completed work.
+- **Hybrid-ready evaluation workflow:** Maintain a golden set of questions to assess retrieval and refusal behavior.
+- **Web interface and CLI:** Search through the browser or run commands from the terminal.
+- **Configurable pipeline:** Adjust transcription, chunking, embeddings, retrieval, and model settings through environment variables.
+
+---
+
+## 🧰 Technology stack
+
+| Layer | Technology |
 |---|---|
-
-| Playlist + audio | `yt-dlp` (Python API) |
-
-| Transcription | `faster-whisper` (CTranslate2), `large-v3`, batched |
-
-| Chunking | hand-written, time-window based |
-
-| Embeddings | `sentence-transformers` + `BAAI/bge-m3` (1024-dim) |
-
-| Vector store | **Qdrant Cloud**  |
-
-| LLM | **Groq** `openai/gpt-oss-120b`  |
-
-| CLI | `typer` + `rich` |
-
-| API + UI | `FastAPI` + a single HTML page with the YouTube IFrame API |
-
-### Where this differs from `RAGPLAN.md`
-
-The plan was written for an Apple Silicon machine with a Gemini key. Three swaps, all
-
-deliberate:
-
-- **`faster-whisper`, not `mlx-whisper`.** `mlx` is Apple-Silicon-only. On this box the CUDA
-
-  path is the faster one anyway — and batched, it is 3x faster than the sequential config
-
-  the plan assumed, at no cost in quality.
-
-- **No `ffmpeg`, no WAV files.** `faster-whisper` decodes audio itself through PyAV, so
-
-  `yt-dlp` downloads the raw m4a and Whisper reads it directly. That removes an install, and
-
-  it removes the 16kHz WAVs that run ~115 MB per hour of video.
-
-- **Qdrant + Groq, not Chroma + Gemini.** The keys are
-
-  already in the repo-root `.env`. Qdrant Cloud also makes Phase 4 deploy trivial — the index
-
-  is already remote, so there is no disk volume to persist.
+| Language | Python |
+| Playlist and audio | `yt-dlp` |
+| Speech-to-text | `faster-whisper` with CTranslate2 |
+| Chunking | Custom, timestamp-aware chunking |
+| Embeddings | `sentence-transformers` with `BAAI/bge-m3` |
+| Vector database | Qdrant Cloud |
+| Language model | Groq — `openai/gpt-oss-120b` |
+| CLI | Typer and Rich |
+| API | FastAPI |
+| Web UI | HTML and YouTube IFrame API |
+| Environment and dependencies | `uv` |
 
 ---
 
-## Setup
+## 🚀 Quick start
+
+### Prerequisites
+
+- Python 3.11
+- [`uv`](https://docs.astral.sh/uv/)
+- A Groq API key
+- A Qdrant Cloud URL and API key
+- CUDA-compatible GPU recommended for full-playlist transcription; CPU fallback is available but slower
+
+### 1. Clone the repository
 
 ```bash
+git clone https://github.com/Shivanshuk186/LectureLens-AI.git
+cd LectureLens-AI
+```
 
-cd <your-project-directory>
+### 2. Create the environment and install dependencies
 
+```bash
 uv venv --python 3.11
-
 uv sync
-
 ```
 
-The CUDA runtime libs that `ctranslate2` needs on Windows are an optional extra:
+For the optional CUDA runtime dependencies used by CTranslate2 on Windows:
 
 ```bash
-
 uv sync --extra cuda
-
 ```
 
-If your GPU is newer than the shipped `ctranslate2` build, `transcribe.py` catches the
+### 3. Configure environment variables
 
-failure and falls back to CPU `int8` with a printed warning. Slower, still correct.
+Create a `.env` file in the repository root. Use `.env.example` as the template and add your own credentials:
 
-**Embeddings run on CPU by default.** `uv` pulls the CPU build of torch from PyPI, so bge-m3
+```dotenv
+GROQ_API_KEY=your_groq_api_key
+QDRANT_URL=your_qdrant_url
+QDRANT_API_KEY=your_qdrant_api_key
+```
 
-embeds on the CPU — fine for querying, and a few minutes rather than seconds when reindexing
+Keep `.env` private. **Never commit API keys or other secrets.**
 
-a full playlist. To put it on the GPU (~3GB download):
+### 4. Run preflight checks
 
 ```bash
-
-uv pip install torch --index-url https://download.pytorch.org/whl/cu124 --force-reinstall
-
+uv run ytrag preflight
 ```
 
-Transcription is unaffected either way: `ctranslate2` ships its own CUDA support and already
-
-uses the GPU.
-
-Keys come from the repo-root `.env` (already present):
-
-```
-
-GROQ_API_KEY=...
-
-QDRANT_URL=...
-
-QDRANT_API_KEY=...
-
-```
-
----
-
-## Runtime data
-
-Lives outside the repo, in `~/.ytrag/`:
-
-```
-
-~/.ytrag/
-
-├── audio/        # <video_id>.m4a — DELETABLE, regenerable in seconds
-
-├── transcripts/  # <video_id>.json — PRECIOUS, hours of GPU time
-
-└── langtest/     # output of `ytrag langtest`
-
-```
-
-That split is the whole point. Transcripts are the expensive artifact; everything downstream
-
-of them is cheap to rebuild, which is why changing your mind about the embedding model or
-
-the chunk size later costs minutes instead of hours.
-
----
-
-## Usage
-
-### 0a. Preflight
+To check a specific playlist as well:
 
 ```bash
-
 uv run ytrag preflight --playlist "<PLAYLIST_URL>"
-
 ```
 
-Checks keys, Qdrant, the embedder, the Whisper model, the transcription code
+The preflight command checks key dependencies and pipeline components before a long ingestion run.
 
-path, playlist listing and the LLM — about a minute. Each check *calls* the
+---
 
-thing rather than asserting it looks importable, because this exists after an
+## 💻 Usage
 
-8-hour run died ten seconds in on a missing import. Run it before any long
-
-ingest.
-
-### 0b. Decide the language flag first
+### Start the web interface
 
 ```bash
-
-uv run ytrag langtest "https://www.youtube.com/watch?v=<one_lecture>"
-
-```
-
-The lectures are Hinglish. `language="hi"` gives Devanagari output; `language="en"` gives
-
-romanised/translated output. Student queries will be romanised Hinglish or English, so these
-
-two produce *very* different retrieval behaviour.
-
-Read a few minutes of each and check what happens to the technical terms specifically —
-
-memoization, adjacency list, time complexity, subproblem, DP table. Whichever keeps those
-
-clean, wins. Then set `YTRAG_WHISPER_LANG` and move on. This decision gets baked into hours
-
-of compute afterwards, so make it on evidence.
-
-### 1. Ingest
-
-```bash
-
-uv run ytrag ingest --playlist "<PLAYLIST_URL>" --limit 1     # Phase 0: one video, end to end
-
-uv run ytrag ingest --playlist "<PLAYLIST_URL>"               # Phase 1: the whole thing
-
-```
-
-Per video: download audio → transcribe (cached) → delete audio → chunk → upsert. One failing
-
-video logs and the run continues. Re-running re-transcribes nothing and duplicates nothing.
-
-#### Speed, measured on an RTX 5050 laptop
-
-Transcription is the only expensive step, and it is paid exactly once — chunking,
-
-embedding and indexing take seconds, and everything downstream rebuilds from cached
-
-transcripts.
-
-| config | speed | 68.7-hour playlist |
-
-|---|---|---|
-
-| `large-v3` sequential, beam 5 (as RAGPLAN specified) | 2.5x realtime | ~27 h |
-
-| `large-v3` **batch 8**, beam 5 — the default here | **8.1x** | **~8.5 h** |
-
-| `large-v3` batch 8, beam 1 | 10.5x | ~6.5 h |
-
-Batching is not a quality tradeoff: same model, same weights, identical technical-term
-
-capture in testing. The sequential path simply leaves the GPU idle between speech
-
-regions. Beam 1 is a real further gain but uses greedy decoding, which is likeliest to
-
-slip on exactly the thing that matters here — an unusual technical term in accented
-
-speech — so the default stays at beam 5.
-
-#### Surviving a long unattended run
-
-Everything is built to be re-run. The command never changes:
-
-```bash
-
-uv run ytrag ingest --playlist "<PLAYLIST_URL>"
-
-```
-
-- **Power cut.** Transcripts are written to a temp file and atomically renamed, so you
-
-  get a complete file or none — never a truncated one the cache then trusts forever.
-
-  Re-run and every finished video is skipped; you lose only the one in flight.
-
-- **Network drop.** Downloads and Qdrant upserts retry four times with exponential
-
-  backoff, so a brief blip costs seconds. Both operations are idempotent, so a retry
-
-  after a partial success is harmless.
-
-- **Network death.** After `--stop-after-failures` videos fail back to back (default 5)
-
-  the run aborts with a clear message instead of ripping through the rest of the
-
-  playlist failing instantly and reporting a "finished" run that did nothing.
-
-- **Ctrl-C.** Caught explicitly; cached work is safe.
-
-- Whisper and the embedding model are cached on disk after first use, so transcription
-
-  itself needs no network at all.
-
-Don't let the machine sleep mid-run — power loss is survivable, suspending the GPU
-
-mid-inference is messier.
-
-### 2. Ask
-
-```bash
-
-uv run ytrag ask "memoization aur tabulation ka difference kya hai?"
-
-uv run ytrag search "adjacency list"      # retrieval only, shows raw distances
-
-```
-
-### 3. Evaluate
-
-```bash
-
-uv run ytrag eval --verbose
-
-```
-
-### 4. Web UI
-
-```bash
-
 uv run ytrag serve
-
 ```
 
-Then <http://127.0.0.1:8000>. Citations call `player.seekTo()` on the embedded player, so
+Open **http://127.0.0.1:8000** in your browser.
 
-clicking `[2]` jumps *inside the page* rather than opening a tab.
+The interface embeds the YouTube player. Selecting a timestamped citation seeks to the relevant point in the video.
 
-### Other commands
+### Ask a question from the CLI
 
 ```bash
+uv run ytrag ask "memoization aur tabulation ka difference kya hai?"
+```
 
-uv run ytrag preflight            # check every dependency before a long run
+### Search without generating an answer
 
-uv run ytrag reindex              # re-chunk + re-embed from cached transcripts
+```bash
+uv run ytrag search "adjacency list"
+```
 
-uv run ytrag reindex --replace    # same, but clear old chunks first (needed if chunk size changed)
+This displays retrieved matches and their distances, helping you inspect retrieval quality.
 
+### Ingest a playlist
+
+First test with one video:
+
+```bash
+uv run ytrag ingest --playlist "<PLAYLIST_URL>" --limit 1
+```
+
+Then ingest the complete playlist:
+
+```bash
+uv run ytrag ingest --playlist "<PLAYLIST_URL>"
+```
+
+The pipeline downloads audio, transcribes it, caches the transcript, creates timestamp-aware chunks, and uploads the resulting vectors. Completed work is designed to be reusable on subsequent runs.
+
+**Before a long run:** use `langtest` to compare transcription language settings and inspect how technical terms are recognized.
+
+```bash
+uv run ytrag langtest "https://www.youtube.com/watch?v=<VIDEO_ID>"
+```
+
+### Rebuild the index from cached transcripts
+
+```bash
+uv run ytrag reindex
+```
+
+If chunking settings have changed and old chunks must be removed first:
+
+```bash
+uv run ytrag reindex --replace
+```
+
+### Evaluate retrieval
+
+```bash
+uv run ytrag eval --verbose
+```
+
+### Other useful commands
+
+```bash
 uv run ytrag stats
-
 uv run ytrag clean-audio
-
+uv run ytrag preflight
 ```
 
 ---
 
-## Sharing this with students
+## ⚙️ Configuration
 
-Students should **never transcribe**. That step needs a decent GPU and ~8.5 hours; on a
+Configuration defaults are defined in [`ytrag/config.py`](ytrag/config.py). Set the variables in your root `.env` file to customize behavior.
 
-typical laptop CPU it would be days. But its output is just text — about **1.4 KB per minute
-
-of video**, so this entire 68.7-hour playlist ships as ~6 MB of JSON (1.5 MB zipped).
-
-So the expensive artifact gets committed to the repo, and everyone else skips straight past
-
-the expensive half.
-
-```bash
-
-uv run ytrag export-transcripts     # copy ~/.ytrag/transcripts -> ./transcripts
-
-git add transcripts && git commit
-
-```
-
-Three ways someone can then use it:
-
-**1. Just use it — zero install.** Point them at the deployed URL. No Python, no keys, no
-
-downloads. This is the right answer for almost everyone.
-
-**2. Run it locally.** Clone, add a free Groq key and a free Qdrant cluster, then:
-
-```bash
-
-uv sync
-
-YTRAG_EMBED_MODEL=all-MiniLM-L6-v2 uv run ytrag reindex
-
-uv run ytrag ask "memoization kya hota hai?"
-
-```
-
-`reindex` finds the bundled `transcripts/` automatically. Takes a few minutes on a laptop
-
-CPU — no GPU, no audio downloads, no yt-dlp. Use `all-MiniLM-L6-v2` (90 MB) rather than the
-
-default bge-m3 (2.2 GB): retrieval on Hinglish is somewhat worse, but it runs comfortably on
-
-any machine. Their index costs ~7 MB in a free Qdrant tier.
-
-**3. Point it at their own playlist.** The full pipeline, on whatever content they have.
-
-That's the version that needs a GPU — and their own playlist is probably a lot shorter than
-
-68 hours.
-
-The split that makes this work is the same one that makes re-tuning cheap locally:
-
-transcripts are precious and portable, everything downstream is disposable.
-
-## Configuration
-
-Everything is env-driven; defaults live in [ytrag/config.py](ytrag/config.py).
-
-| Variable | Default | Notes |
-
+| Variable | Default | Purpose |
 |---|---|---|
+| `YTRAG_WHISPER_LANG` | `en` | Transcription language; validate with `langtest` |
+| `YTRAG_WHISPER_MODEL` | `large-v3` | Whisper model; `medium` is a lighter option |
+| `YTRAG_WHISPER_DEVICE` | `auto` | Device selection: `auto`, `cuda`, or `cpu` |
+| `YTRAG_WHISPER_BATCH` | `8` | Transcription batch size; `0` disables batching |
+| `YTRAG_WHISPER_BEAM` | `5` | Beam size; `1` is faster but uses greedy decoding |
+| `YTRAG_CHUNK_SECONDS` | `75` | Target chunk duration in seconds |
+| `YTRAG_CHUNK_OVERLAP` | `15` | Overlap between adjacent chunks, in seconds |
+| `YTRAG_EMBED_MODEL` | `BAAI/bge-m3` | Embedding model; `all-MiniLM-L6-v2` is a smaller alternative |
+| `YTRAG_COLLECTION` | `dsa_lectures` | Base Qdrant collection name |
+| `YTRAG_TOP_K` | `6` | Number of retrieved candidates |
+| `YTRAG_MAX_DISTANCE` | `0.5` | Relevance cutoff; tune using real queries and evaluation |
+| `YTRAG_LLM_MODEL` | `openai/gpt-oss-120b` | Groq model identifier |
 
-| `YTRAG_WHISPER_LANG` | `en` | Decide this with `langtest` first |
-
-| `YTRAG_WHISPER_MODEL` | `large-v3` | `medium` if you're impatient |
-
-| `YTRAG_WHISPER_DEVICE` | `auto` | `cuda` / `cpu` to force |
-
-| `YTRAG_WHISPER_BATCH` | `8` | Batched inference — see below. `0` disables |
-
-| `YTRAG_WHISPER_BEAM` | `5` | `1` is ~30% faster, greedy decoding |
-
-| `YTRAG_CHUNK_SECONDS` | `75` | ~one explained idea |
-
-| `YTRAG_CHUNK_OVERLAP` | `15` | |
-
-| `YTRAG_EMBED_MODEL` | `BAAI/bge-m3` | `all-MiniLM-L6-v2` for a small deploy tier |
-
-| `YTRAG_COLLECTION` | `dsa_lectures` | the embedding dim gets appended |
-
-| `YTRAG_TOP_K` | `6` | |
-
-| `YTRAG_MAX_DISTANCE` | `0.5` | the grounding cutoff — see below, and re-tune |
-
-| `YTRAG_LLM_MODEL` | `openai/gpt-oss-120b` | |
+Use the exact variable names expected by the current code. Changing embedding models may require rebuilding the index because embedding dimensions can differ.
 
 ---
 
-## The golden set
+## 🧪 Evaluation
 
-[eval/golden.json](eval/golden.json) holds two kinds of entry.
+The evaluation questions live in [`eval/golden.json`](eval/golden.json).
 
-**Retrieval** — a hit means the expected video appears in top-k *and* at least one returned
+The set supports two types of checks:
 
-chunk overlaps `expect_around_sec ± tolerance_sec`:
+- **Retrieval checks:** Whether the expected lecture appears among the top results and a retrieved chunk falls near the expected timestamp.
+- **Refusal checks:** Whether the system declines to answer questions outside the indexed lecture content.
 
-```json
-
-{"q": "memoization vs tabulation kya difference hai?",
-
- "expect_video_id": "abc123", "expect_around_sec": 724, "tolerance_sec": 120}
-
-```
-
-**Refusal** — a hit means the pipeline declines to answer:
-
-```json
-
-{"q": "React hooks kaise kaam karte hain?", "expect_refusal": true}
-
-```
-
-The refusal entries ship working; the retrieval entries are templates you fill in with your
-
-own video IDs (entries whose `q` starts with `_` are skipped). Writing 15-20 real ones takes
-
-about half an hour and is the only way to tell whether a change improved retrieval or just
-
-felt better on the one query you kept re-testing.
-
-### Tuning `MAX_DISTANCE`
-
-`RAGPLAN.md` suggests `0.75`. Measured against bge-m3 on Hinglish DSA text, that value
-
-**never fires** — the guard is silently off. bge-m3 compresses its distances:
-
-```
-
-ON   memoization aur tabulation me kya difference hai?   0.465
-
-ON   bfs kaise kaam karta hai                            0.379
-
-ON   adjacency list kya hoti hai                         0.353
-
-OFF  Kubernetes me pod aur deployment ka difference?     0.523
-
-OFF  React hooks kaise kaam karte hain?                  0.549
-
-OFF  How do I file my income tax return in India?        0.622
-
-OFF  what is the capital of France                       0.711
-
-```
-
-So the default here is `0.5`, which sits in the separating band. Treat it as a starting
-
-point: on a full index an off-topic query has thousands more chunks to find a spuriously
-
-close match among, so that off-topic floor drifts downwards. Run `ytrag search` on a few
-
-real questions, read the distances, and re-tune with `ytrag eval`.
-
-Note what happened in testing with the loose value: the distance guard let all six chunks
-
-through on "React hooks kaise kaam karte hain?", and the *model's own* refusal is what saved
-
-the answer. That works, but it is one guard doing the job of two, and it costs an LLM call
-
-every time. The cutoff is the cheap guard — keep it armed.
-
----
-
-## The failure modes this codebase is built around
-
-**Don't use a generic text splitter.** `RecursiveCharacterTextSplitter` operates on one
-
-concatenated string and throws the timestamps away. The timestamp *is* the product here, so
-
-[ytrag/chunk.py](ytrag/chunk.py) chunks on the segment list, in the time domain, and never
-
-splits a segment.
-
-**Whisper loop hallucinations.** On silence or a music sting Whisper repeats the previous
-
-phrase forever. `condition_on_previous_text=False` and `vad_filter=True` cut most of it;
-
-`is_repetitive()` in `chunk.py` drops what survives. These chunks are retrieval poison — they
-
-match everything and say nothing.
-
-**The transcript cache is the most important line in the codebase.** Re-transcribing a
-
-40-video playlist by accident costs hours. It's written atomically (temp file + `os.replace`)
-
-so a Ctrl-C mid-write can't leave a truncated file that the cache check then trusts forever.
-
-**The timestamp should land slightly early.** Retrieval hits the chunk containing the answer,
-
-but the explanation usually starts just before it. Citation URLs rewind 5 seconds
-
-(`YTRAG_LINK_REWIND`). Small thing, noticeably better feel.
-
-**Ungrounded answers will destroy the demo.** The model knows DSA perfectly well. Given junk
-
-context it will answer from its own training and cheerfully attach your timestamps to it —
-
-the student clicks and you're talking about something else. That is strictly worse than
-
-saying "cover nahi hua". Three guards in [ytrag/answer.py](ytrag/answer.py):
-
-1. drop everything above `MAX_DISTANCE`, and if nothing survives return the refusal
-
-   **without calling the LLM at all**;
-
-2. honour the model's own refusal;
-
-3. an answer with zero citations is marked `grounded: false` and gets no links.
-
-**Idempotency.** Cached transcripts, `upsert` not `add`, deterministic point IDs
-
-(`uuid5` of `"{video_id}:{start_sec}"`), resume on partial failure. You *will* re-run this
-
-many times.
-
----
-
-## Deploying (Phase 4)
-
-bge-m3 is ~2.2GB and won't fit a free tier. Because transcripts are cached, swapping is a few
-
-minutes of embedding rather than hours of re-transcription:
+Run:
 
 ```bash
-
-YTRAG_EMBED_MODEL=all-MiniLM-L6-v2 uv run ytrag reindex
-
+uv run ytrag eval --verbose
 ```
 
-The dim differs (1024 vs 384), which is exactly why the collection name carries it — both
-
-indexes coexist in the same Qdrant cluster and nothing has to be torn down.
-
-Ship `api.main:app` to Render/Railway/Fly with the same three env vars. `/ask` is already
-
-rate-limited (`YTRAG_RATE_LIMIT_REQUESTS` per `YTRAG_RATE_LIMIT_WINDOW` seconds, per IP) and
-
-question length is capped at `YTRAG_MAX_QUESTION_CHARS`. The rate limiter is in-process, so
-
-put it in Redis before running more than one worker.
+Add representative questions from your own playlist and verify both successful retrievals and out-of-scope refusals. Treat relevance thresholds as starting points and validate them against the complete index.
 
 ---
 
-## Definition of done (Phase 2)
+## 🗂️ Project structure
 
-- [ ] Language flag decided with evidence, not vibes
+```text
+LectureLens-AI/
+├── api/
+│   ├── main.py
+│   └── static/
+│       └── index.html
+├── eval/
+│   ├── golden.json
+│   └── golden_draft.json
+├── index/
+│   └── vectors.npz
+├── ytrag/
+│   ├── answer.py
+│   ├── chunk.py
+│   ├── cli.py
+│   ├── config.py
+│   ├── embed.py
+│   ├── evaluate.py
+│   ├── index.py
+│   ├── models.py
+│   ├── playlist.py
+│   ├── transcribe.py
+│   └── util.py
+├── .env.example
+├── .gitignore
+├── main.py
+├── pyproject.toml
+├── uv.lock
+├── README.md
+├── SETUP.md
+└── RAGPLAN.md
+```
 
-- [ ] `ingest` on the full playlist survives a video failing mid-run
+Local transcripts and environment secrets are intentionally excluded from version control. Check `.gitignore` before adding local data.
 
-- [ ] Re-running `ingest` re-transcribes nothing and duplicates nothing
+---
 
-- [ ] `reindex` rebuilds the vector store from cached transcripts alone
+## 🧠 Important implementation details
 
-- [ ] An out-of-syllabus question returns the refusal, not a confident answer with fake timestamps
+### Timestamp-aware chunking
 
-- [ ] `eval` prints a hit-rate and lists its misses
+Generic text splitting can separate an explanation from its timestamp. LectureLens AI chunks the transcript in the time domain, preserving the association between text and video position.
 
-- [ ] Every citation link, clicked, lands within ~10s of the actual explanation
+### Transcript caching and resumability
+
+Transcripts are cached so completed videos do not need to be transcribed again. Atomic writes help avoid leaving partially written cache files after interruption.
+
+### Relevance checks and grounded answers
+
+Retrieval uses a distance cutoff before context is sent to the language model. If no suitable context survives, the system can refuse to answer instead of inventing an explanation with misleading citations. Answers without citations are not treated as grounded.
+
+### Reliable ingestion
+
+The ingestion pipeline is designed to tolerate interrupted runs, retry transient failures, and avoid duplicate vector entries through deterministic IDs and upserts.
+
+### Transcription performance
+
+The project uses batched `faster-whisper` inference. Actual throughput depends on GPU, drivers, model configuration, audio, and batch settings; measure performance on your own machine before estimating the time for a full playlist.
+
+---
+
+## ☁️ Deployment notes
+
+The FastAPI application is exposed as `api.main:app`. A deployment platform such as Render, Railway, or Fly.io can host the API, provided the required environment variables and model/vector services are configured.
+
+Before deploying:
+
+1. Configure the Groq and Qdrant credentials as platform secrets.
+2. Confirm the selected embedding model and Qdrant collection dimensions match.
+3. Test `/ask` and the web UI locally.
+4. Check the platform's memory, request timeout, and concurrency limits.
+5. If running multiple API workers, use a shared rate limiter rather than relying on in-process state.
+
+The full transcription pipeline is resource-intensive. For a hosted demo, prepare the index before deployment instead of transcribing the entire playlist during startup.
+
+---
+
+## 🔐 Privacy and repository hygiene
+
+- Store credentials in `.env`; do not commit that file.
+- Keep `.env.example` limited to blank placeholders.
+- Keep local transcript files excluded if you do not intend to redistribute them.
+- Confirm that you have permission to index and redistribute any lecture-derived data you publish.
+- Review the repository contents before each push.
+
+---
+
+## 📌 Project status
+
+LectureLens AI is a lecture-search project focused on grounded answers, useful citations, and fast navigation to the relevant point in a video.
+
+**Every Concept. Every Timestamp. One Search Away.**
+
+<div align="center">
+
+Built with Python · FastAPI · Qdrant · Groq
+
+</div>
